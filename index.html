@@ -1044,32 +1044,62 @@ function buildPromptBox(){
   el.textContent=getPromptText(hoje);
 }
 function getPromptText(hoje){
-  return`Você é um assistente jurídico especializado em extração de prazos processuais.
+  const SU='https://nuelqfvnjacnbctodreg.supabase.co';
+  const SK='sb_publishable_rlgOc-_O890oEgzVjInQZg_ep4fmqbO';
+  return `Voce e um assistente juridico especializado em extracao e cadastro automatico de prazos processuais no sistema EquilibJUS.
 
-Analise o conteúdo desta página do sistema judicial que estou vendo agora.
+MISSAO: Analisar o conteudo colado, extrair todos os processos/prazos e salva-los automaticamente no banco de dados via API Supabase.
 
-Para cada processo/intimação/expediente encontrado, extraia:
-- numero: número CNJ completo
-- parte: nome da parte (réu/autor conforme contexto)
-- assunto: tipo da ação ou assunto
-- sistema: nome do sistema (ex: PJe2/TRF1, eProc/TJTO, TRT10)
-- actType: ato a praticar (Contestar, Recorrer, Responder, Tomar Ciência, etc)
-- logins: array com advogados identificados na tela
-- dueDate: data limite em YYYY-MM-DD (calcule dias úteis: embargos=5du, contestação TRT=5du)
-- status: "vencido" | "crítico" (<=5d) | "atenção" (6-15d) | "em dia" (>15d)
-- client: nome do cliente representado
-- paymentStatus: "pago" | "pendente" | "não aplicável"
-- notes: intimação, expediente, juiz/câmara, obs relevantes
+Data de hoje: ${hoje}
+
+EXTRACAO — Para cada processo/intimacao/expediente extraia em JSON:
+- numero: numero CNJ completo
+- parte: nome da parte
+- assunto: tipo da acao
+- sistema: ex: PJe2/TRF1, eProc/TJTO, TRT10
+- actType: ato a praticar (Contestar, Recorrer, Responder, Tomar Ciencia, etc)
+- logins: array de advogados (padrao: ["Ricardo"])
+- dueDate: data limite YYYY-MM-DD (dias uteis: embargos=5du, contestacao TRT=5du)
+- status: vencido | critico (<=5d) | atencao (6-15d) | em dia (>15d)
+- client: nome do cliente
+- paymentStatus: pago | pendente | nao aplicavel
+- notes: intimacao, expediente, juiz, obs
 
 REGRAS:
-- Mesmo processo em logins diferentes = UM registro com todos os logins no array
-- Prazos em dias úteis: exclua sábados, domingos e feriados nacionais
-- Data de hoje: ${hoje}
-- Se campo incerto, deixe vazio
-- Responda APENAS com JSON válido, sem texto adicional, sem markdown
+- Mesmo processo em logins diferentes = UM registro com todos os logins
+- Dias uteis: excluir sabados, domingos e feriados nacionais
 
-{"processos":[{"numero":"","parte":"","assunto":"","sistema":"","actType":"","logins":[],"dueDate":"","status":"","client":"","paymentStatus":"não aplicável","notes":""}]}`;
+SALVAMENTO AUTOMATICO:
+Apos extrair o JSON, execute este codigo JavaScript (use a ferramenta de execucao de codigo da extensao):
+
+(async () => {
+const processos = [COLE_O_ARRAY_JSON_AQUI];
+const SU = 'https://nuelqfvnjacnbctodreg.supabase.co';
+const SK = 'sb_publishable_rlgOc-_O890oEgzVjInQZg_ep4fmqbO';
+const h = {'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json'};
+const hoje = new Date().toLocaleDateString('pt-BR');
+const res = [];
+for (const p of processos) {
+  const num = encodeURIComponent(p.numero||p.number||'');
+  const chk = await fetch(SU+'/rest/v1/processos?number=eq.'+num+'&encerrado=eq.false&select=id',{headers:h});
+  const ex = await chk.json();
+  const d = {number:p.numero||p.number||'',party:p.parte||p.party||'',subject:p.assunto||p.subject||'',logins:p.logins||['Ricardo'],system:p.sistema||p.system||'',act_type:p.actType||'Responder',due_date:p.dueDate||null,status:p.status||'em dia',client:p.client||p.cliente||'',payment_status:p.paymentStatus||'nao aplicavel',notes:p.notes||'',encerrado:false};
+  let r,acao;
+  if(ex&&ex.length>0){r=await fetch(SU+'/rest/v1/processos?id=eq.'+ex[0].id,{method:'PATCH',headers:{...h,'Prefer':'return=minimal'},body:JSON.stringify({due_date:d.due_date,status:d.status,act_type:d.act_type,notes:'[IA '+hoje+']: '+d.notes})});acao='ATUALIZADO';}
+  else{r=await fetch(SU+'/rest/v1/processos',{method:'POST',headers:{...h,'Prefer':'return=minimal'},body:JSON.stringify(d)});acao='INSERIDO';}
+  res.push({numero:d.number,acao,ok:r.ok,http:r.status});
 }
+console.table(res);
+alert('EquilibJUS: '+res.filter(x=>x.ok).length+' salvo(s) | '+res.filter(x=>!x.ok).length+' erro(s)');
+})();
+
+RELATORIO FINAL — Apos executar o codigo, me informe:
+Inseridos: [numeros novos]
+Atualizados: [numeros existentes]
+Erros: [se houver]
+Total: X processo(s) em ${hoje}`;
+}
+
 function limparAgente(){agentMessages=[];renderTerminal();}
 function atalhoAgente(msg){const inp=document.getElementById('agent-input');if(inp)inp.value=msg;enviarAgente();}
 async function enviarAgente(){
